@@ -1,8 +1,10 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  
   return {
     plugins: [react(), tailwindcss()],
     server: {
@@ -15,8 +17,7 @@ export default defineConfig(() => {
       },
     },
     define: {
-      'import.meta.env.VITE_ZHIPU_API_KEY': JSON.stringify(process.env.VITE_ZHIPU_API_KEY),
-      'import.meta.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || '/api/chat/completions'),
+      'import.meta.env.VITE_ZHIPU_API_KEY': JSON.stringify(env.VITE_ZHIPU_API_KEY),
     },
   }
 })
