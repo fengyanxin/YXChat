@@ -1,11 +1,13 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import type { Message, Conversation } from '../types';
+import type { Message, Conversation, ThemeMode, AccentColor } from '../types';
+import { ACCENT_COLORS } from '../types';
 import { chatStream } from '../api';
 
 const STORAGE_KEY = 'yxchat_conversations';
+const THEME_KEY = 'yxchat_theme';
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -44,11 +46,43 @@ export default function ChatInterface() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    try {
+      const stored = localStorage.getItem(THEME_KEY);
+      return stored ? JSON.parse(stored).mode : 'system';
+    } catch {
+      return 'system';
+    }
+  });
+  const [accentColor, setAccentColor] = useState<AccentColor>(() => {
+    try {
+      const stored = localStorage.getItem(THEME_KEY);
+      return stored ? JSON.parse(stored).accentColor : 'green';
+    } catch {
+      return 'green';
+    }
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const activeConversation = conversations.find(c => c.id === activeId);
-  const messages = useMemo(() => activeConversation?.messages || [], [activeConversation]);
+  const messages = activeConversation?.messages || [];
+
+  const effectiveTheme = themeMode === 'system' 
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : themeMode;
+
+  console.log('effectiveTheme:', effectiveTheme, 'themeMode:', themeMode);
+
+  useEffect(() => {
+    console.log('Applying theme:', effectiveTheme);
+    const root = document.documentElement;
+    if (effectiveTheme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [effectiveTheme]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
@@ -57,6 +91,30 @@ export default function ChatInterface() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    localStorage.setItem(THEME_KEY, JSON.stringify({ mode: themeMode, accentColor }));
+  }, [themeMode, accentColor]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (themeMode === 'dark') {
+      root.classList.add('dark');
+    } else if (themeMode === 'light') {
+      root.classList.remove('dark');
+    } else {
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
+    }
+  }, [themeMode]);
+
+  useEffect(() => {
+    const color = ACCENT_COLORS.find(c => c.value === accentColor)?.hex || '#22c55e';
+    document.documentElement.style.setProperty('--accent-color', color);
+  }, [accentColor]);
 
   const createNewConversation = () => {
     const newConv: Conversation = {
@@ -203,12 +261,13 @@ export default function ChatInterface() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <div className="w-1/4 bg-white border-r flex flex-col">
-        <div className="p-3 border-b">
+    <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
+      <div className="w-1/4 bg-white dark:bg-gray-800 border-r dark:border-gray-700 flex flex-col">
+        <div className="p-3 border-b dark:border-gray-700">
           <button
             onClick={createNewConversation}
-            className="w-full bg-green-500 text-white rounded-lg px-4 py-2 hover:bg-green-600 transition-colors"
+            className="w-full text-white rounded-lg px-4 py-2 hover:opacity-90 transition-opacity"
+            style={{ backgroundColor: 'var(--accent-color)' }}
           >
             + 新对话
           </button>
@@ -223,12 +282,13 @@ export default function ChatInterface() {
               <div
                 key={conv.id}
                 onClick={() => switchConversation(conv.id)}
-                className={`p-3 border-b cursor-pointer hover:bg-gray-50 ${
-                  activeId === conv.id ? 'bg-green-50 border-l-4 border-l-green-500' : ''
+                className={`p-3 border-b dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                  activeId === conv.id ? 'border-l-4' : ''
                 }`}
+                style={activeId === conv.id ? { borderLeftColor: 'var(--accent-color)', backgroundColor: 'color-mix(in srgb, var(--accent-color) 10%, transparent)' } : undefined}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-700 truncate flex-1">
+                  <span className="text-sm text-gray-700 dark:text-gray-200 truncate flex-1">
                     {conv.title || '新对话'}
                   </span>
                   <button
@@ -254,13 +314,32 @@ export default function ChatInterface() {
       </div>
 
       <div className="flex-1 flex flex-col">
-        <header className="bg-white shadow-sm px-4 py-3">
-          <h1 className="text-lg font-semibold text-gray-800">
+        <header className="bg-white dark:bg-gray-800 shadow-sm px-4 py-3 flex items-center justify-between">
+          <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
             {activeConversation?.title || 'AI Assistant'}
           </h1>
+          <div className="flex items-center gap-2 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1">
+            <button
+              onClick={() => setThemeMode(effectiveTheme === 'light' ? 'dark' : 'light')}
+              className="text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 w-6"
+              title={effectiveTheme === 'light' ? '切换到深色' : '切换到浅色'}
+            >
+              {effectiveTheme === 'light' ? '🌙' : '☀️'}
+            </button>
+            <div className="w-px h-4 bg-gray-300 dark:bg-gray-600" />
+            {ACCENT_COLORS.map(c => (
+              <button
+                key={c.value}
+                onClick={() => setAccentColor(c.value)}
+                className={`w-4 h-4 rounded-full ${accentColor === c.value ? 'ring-2 ring-offset-1' : ''}`}
+                style={{ backgroundColor: c.hex }}
+                title={c.label}
+              />
+            ))}
+          </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-100 dark:bg-gray-900">
           {!activeId || messages.length === 0 ? (
             <div className="flex items-center justify-center h-full text-gray-400">
               <p>开始新对话...</p>
@@ -274,9 +353,10 @@ export default function ChatInterface() {
                 <div
                   className={`max-w-[70%] rounded-2xl px-4 py-2 ${
                     msg.role === 'user'
-                      ? 'bg-green-500 text-white rounded-br-sm'
-                      : 'bg-white text-gray-800 rounded-bl-sm shadow-sm'
+                      ? 'text-white rounded-br-sm'
+                      : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 rounded-bl-sm shadow-sm'
                   }`}
+                  style={msg.role === 'user' ? { backgroundColor: 'var(--accent-color)' } : undefined}
                 >
                   {msg.role === 'assistant' && msg.content && (
                     <div className="flex justify-end">
@@ -318,8 +398,8 @@ export default function ChatInterface() {
 
           {isLoading && messages.length > 0 && messages[messages.length - 1]?.role !== 'assistant' && (
             <div className="flex justify-start">
-              <div className="bg-white rounded-2xl rounded-bl-sm px-4 py-2 shadow-sm flex items-center gap-2">
-                <span className="text-gray-500 text-sm">思考中...</span>
+              <div className="bg-white dark:bg-gray-800 rounded-2xl rounded-bl-sm px-4 py-2 shadow-sm flex items-center gap-2">
+                <span className="text-gray-500 dark:text-gray-400 text-sm">思考中...</span>
                 <div className="flex space-x-1">
                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -340,7 +420,7 @@ export default function ChatInterface() {
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="bg-white border-t p-4">
+        <div className="bg-white dark:bg-gray-800 border-t dark:border-gray-700 p-4">
           <div className="flex items-end gap-2 max-w-4xl mx-auto">
             <textarea
               ref={inputRef}
@@ -348,14 +428,16 @@ export default function ChatInterface() {
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="输入消息..."
-              className="flex-1 resize-none border border-gray-300 rounded-2xl px-4 py-2 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 max-h-32"
+              className="flex-1 resize-none border border-gray-300 dark:border-gray-600 rounded-2xl px-4 py-2 text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 disabled:bg-gray-100 dark:disabled:bg-gray-700 max-h-32"
+              style={{ '--tw-ring-color': ACCENT_COLORS.find(c => c.value === accentColor)?.hex } as React.CSSProperties}
               rows={1}
               disabled={isLoading}
             />
             <button
               onClick={handleSend}
               disabled={!input.trim() || isLoading}
-              className="bg-green-500 text-white rounded-2xl px-4 py-2 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              className="text-white rounded-2xl px-4 py-2 hover:opacity-90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-opacity"
+              style={{ backgroundColor: 'var(--accent-color)' }}
             >
               发送
             </button>
