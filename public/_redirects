@@ -1,0 +1,2 @@
+/api/* https://open.bigmodel.cn/api/paas/v4/:splat 200
+/* /index.html 200
