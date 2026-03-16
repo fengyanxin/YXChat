@@ -61,7 +61,7 @@ npm run build
 ### Netlify 部署
 
 1. 在 Netlify 平台创建项目，连接 Git 仓库
-2. 在 "Site settings" → "Environment variables" 中点击 "Advanced" 切换到 secrets，添加：
+2. 在 "Site settings" → "Environment variables" 中添加（使用 Variables，不要使用 Advanced secrets）：
    - Key: `VITE_ZHIPU_API_KEY`
    - Value: 你的 API 密钥
 3. 构建设置：
